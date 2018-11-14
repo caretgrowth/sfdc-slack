@@ -10,24 +10,37 @@ public class SlackPostAction {
         public String author_icon;
         public String title;
         public String title_link;
+        public String image_url;
+        public String thumb_url;
+        public String footer;
+        public String footer_icon;
+        public Integer ts;
         public String text;
         public List<SlackField> fields = new List<SlackField>();
-        // public String ts;
 
         public SlackPost(String text) {
             this.text = text;
         }
 
         public Boolean isAttachment() {
-            return this.fallback != null || this.color != null || this.pretext != null || this.author_name != null || this.author_link != null || this.author_icon != null || this.title != null || this.title_link != null || this.fields != null ;
+            return this.fallback != null || this.color != null || this.pretext != null 
+                || this.author_name != null || this.author_link != null || this.author_icon != null 
+                || this.title != null || this.title_link != null || this.fields != null 
+                || this.image_url != null || this.thumb_url != null || this.footer != null
+                || this.footer_icon != null || this.ts != null;
         }
 
         public void addFields(String field1, String field2, String field3, String field4, String field5) {
-            if(field1 != null) { this.fields.add((SlackField)JSON.deserialize(field1.replace('"short":', '"shortB":'), SlackField.class)); }
-            if(field2 != null) { this.fields.add((SlackField)JSON.deserialize(field2.replace('"short":', '"shortB":'), SlackField.class)); }
-            if(field3 != null) { this.fields.add((SlackField)JSON.deserialize(field3.replace('"short":', '"shortB":'), SlackField.class)); }
-            if(field4 != null) { this.fields.add((SlackField)JSON.deserialize(field4.replace('"short":', '"shortB":'), SlackField.class)); }
-            if(field5 != null) { this.fields.add((SlackField)JSON.deserialize(field5.replace('"short":', '"shortB":'), SlackField.class)); }
+            List<String> inputFields = new List<String>{field1, field2, field3, field4, field5};
+            Integer fieldCount = 0;
+
+            for(String f: inputFields) {
+                if(f != null) {
+                    this.fields.add((SlackField)JSON.deserialize(f.replace('"short":', '"shortB":'), SlackField.class));
+                    fieldCount++;
+                }
+            }
+            if(fieldCount == 0) { this.fields = null; }
         }
     }
 
@@ -38,7 +51,7 @@ public class SlackPostAction {
     }
 
     public class SlackPostRequest {
-        SlackPost post;
+        public SlackPost post;
         public String body;
 
         // SlackPost Variables
@@ -60,6 +73,16 @@ public class SlackPostAction {
         public String title;
         @InvocableVariable(label='Title Link' required=false)
         public String title_link;
+        @InvocableVariable(label='Image URL' required=false)
+        public String image_url;
+        @InvocableVariable(label='Thumb URL' required=false)
+        public String thumb_url;
+        @InvocableVariable(label='Footer Text' required=false)
+        public String footer;
+        @InvocableVariable(label='Footer Icon' required=false)
+        public String footer_icon;
+        @InvocableVariable(label='Timestamp' required=false)
+        public Integer ts;
 
         // Specific to the SlackPostRequest
         @InvocableVariable(label='Webhook Name' required=true)
@@ -79,9 +102,9 @@ public class SlackPostAction {
 
         public SlackPostRequest(String text, String webhookName) {
             this.text = text;
+            this.post = new SlackPost(text);
             this.webhookName = webhookName;
         }
-
     }
 
     public static void sendSlackPost(SlackPostRequest request) {
@@ -101,25 +124,42 @@ public class SlackPostAction {
 
         for(SlackPostRequest r: requests) {
             String url = webhooks.get(r.webhookName);
-            r.post = new SlackPost(r.text);
-            r.post.addFields(r.field1, r.field2, r.field3, r.field4, r.field5);
-            r.post.fallback = r.fallback != null ? r.fallback : null;
-            r.post.color = r.color != null ? r.color : null;
-            r.post.pretext = r.pretext != null ? r.pretext : null;
-            r.post.author_name = r.author_name != null ? r.author_name : null;
-            r.post.author_link = r.author_link != null ? r.author_link : null;
-            r.post.title = r.title != null ? r.title : null;
-            r.post.title_link = r.title_link != null ? r.title_link : null;
 
             if(url != null) {
-                r.body = buildJsonBody();
+                r.body = buildJsonBody(r);
                 postToSlack(r.body, url);
             }
-
         }
     }
 
-    public buildJsonBody();
+    public static SlackPost buildPost(SlackPostRequest r) {
+        r.post = new SlackPost(r.text);
+        r.post.addFields(r.field1, r.field2, r.field3, r.field4, r.field5);
+        r.post.fallback = r.fallback != null ? r.fallback : null;
+        r.post.color = r.color != null ? r.color : null;
+        r.post.pretext = r.pretext != null ? r.pretext : null;
+        r.post.author_name = r.author_name != null ? r.author_name : null;
+        r.post.author_link = r.author_link != null ? r.author_link : null;
+        r.post.author_icon = r.author_icon != null ? r.author_icon : null;
+        r.post.title = r.title != null ? r.title : null;
+        r.post.title_link = r.title_link != null ? r.title_link : null;
+        r.post.image_url = r.image_url != null ? r.image_url : null;
+        r.post.thumb_url = r.thumb_url != null ? r.thumb_url : null;
+        r.post.footer = r.footer != null ? r.footer : null;
+        r.post.footer_icon = r.footer_icon != null ? r.footer_icon : null;
+        r.post.ts = r.ts != null ? r.ts : null;
+
+        return r.post;
+    }
+
+    public static String buildJsonBody(SlackPostRequest postReq) {
+        SlackPost post = buildPost(postReq);
+        String body = JSON.serialize(post, true).replace('"shortB":', '"short":');
+        if(post.isAttachment()) {
+            body = '{"attachments": [' + body + ']}';
+        }
+        return body;
+    }
 
     public static void postToSlack(String body, String url) {
         System.enqueueJob(new qCallOut(url, 'POST', body));
